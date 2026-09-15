@@ -18,6 +18,8 @@ $compilerArgs += @(Get-ChildItem "$root\src\*.cs" | Sort-Object Name | ForEach-O
 & $compiler @compilerArgs
 if ($LASTEXITCODE -ne 0) { throw 'Build failed. Close applications using the output directory and retry.' }
 Copy-Item "$root\assets\Banarec.ico","$root\assets\Banarec.png","$root\src\Banarec.exe.config" $OutputDirectory -Force
-Copy-Item "$root\docs\使用说明.txt" $OutputDirectory -Force
-Copy-Item "$root\third_party\ScreenRecorderLib.LICENSE" (Join-Path $OutputDirectory '第三方许可.txt') -Force
+$guide = Get-ChildItem (Join-Path $root 'docs') -Filter '*.txt' | Select-Object -First 1
+if (!$guide) { throw 'The user guide is missing.' }
+Copy-Item $guide.FullName (Join-Path $OutputDirectory 'guide.txt') -Force
+Copy-Item "$root\third_party\ScreenRecorderLib.LICENSE" (Join-Path $OutputDirectory 'THIRD-PARTY-LICENSES.txt') -Force
 Write-Host "Built $OutputDirectory\Banarec.exe"

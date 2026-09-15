@@ -20,8 +20,8 @@ using Drawing=System.Drawing;
 
 [assembly:AssemblyTitle("Banarec · 香蕉录屏")]
 [assembly:AssemblyProduct("Banarec")]
-[assembly:AssemblyVersion("2.1.0.0")]
-[assembly:AssemblyFileVersion("2.1.0.0")]
+[assembly:AssemblyVersion("2.2.0.0")]
+[assembly:AssemblyFileVersion("2.2.0.0")]
 
 static class Entry {
  [STAThread] public static void Main(string[] args) {
@@ -48,7 +48,8 @@ sealed class Controller {
  public readonly Window Window;
  readonly bool realHotkeys;bool loading=true,quit,disposed,recordKey,shotKey,showAfterShot;
  readonly Forms.NotifyIcon tray;readonly DispatcherTimer timer;readonly EventWaitHandle showEvent;readonly RegisteredWaitHandle showWait;
- ScreenshotShortcut shortcut;
+ readonly Forms.ToolStripMenuItem shotMenu,recordMenu;GlobalShortcutHook shortcut;
+ HotkeyGesture screenshotGesture=HotkeyGesture.DefaultScreenshot,recordGesture=HotkeyGesture.DefaultRecording;
  IntPtr handle;Capture capture;RecordingBorder border;Hud hud;Countdown countdown;RegionPicker picker;
  Forms.Screen screen;Drawing.Rectangle area;int generation;readonly Stopwatch elapsed=new Stopwatch();
  public string State {get;private set;} public string LastFile {get;private set;}
@@ -70,13 +71,14 @@ sealed class Controller {
   var screens=UI<ComboBox>("Screens");var all=Forms.Screen.AllScreens;for(int i=0;i<all.Length;i++)screens.Items.Add("显示器 "+(i+1)+(all[i].Primary?" · 主屏":"")+"  "+all[i].Bounds.Width+" × "+all[i].Bounds.Height);
   screens.SelectionChanged+=(s,e)=>{if(screens.SelectedIndex<0)return;screen=all[screens.SelectedIndex];area=Capture.Normalize(screen.Bounds,screen.Bounds);RefreshRegion();};screens.SelectedIndex=Array.FindIndex(all,s=>s.Primary);
   UI<ComboBox>("Framerate").SelectedIndex=0;LoadSettings();UI<CheckBox>("AutoStart").IsChecked=Startup.Enabled;
-  foreach(string name in new[]{"SystemAudio","Microphone","Compatibility","ScreenshotHotkey"}){var box=UI<CheckBox>(name);box.Checked+=(s,e)=>SettingsChanged();box.Unchecked+=(s,e)=>SettingsChanged();}
+  foreach(string name in new[]{"SystemAudio","Microphone","Compatibility"}){var box=UI<CheckBox>(name);box.Checked+=(s,e)=>SettingsChanged();box.Unchecked+=(s,e)=>SettingsChanged();}
   UI<ComboBox>("Framerate").SelectionChanged+=(s,e)=>SettingsChanged();
   UI<CheckBox>("AutoStart").Checked+=(s,e)=>ChangeStartup(true);UI<CheckBox>("AutoStart").Unchecked+=(s,e)=>ChangeStartup(false);
+  Bind("ScreenshotShortcutButton",()=>ChangeHotkey(true));Bind("RecordingShortcutButton",()=>ChangeHotkey(false));RefreshHotkeyLabels();
   loading=false;UpdateQuality();
-  var menu=new Forms.ContextMenuStrip();menu.Items.Add("打开 Banarec",null,(s,e)=>Dispatch(Show));menu.Items.Add("截图   Ctrl + Alt + A",null,(s,e)=>Dispatch(async()=>await Screenshot(false)));menu.Items.Add("开始 / 停止录制",null,(s,e)=>Dispatch(async()=>{if(State=="idle")await Begin();else Stop();}));menu.Items.Add("打开下载文件夹",null,(s,e)=>Dispatch(OpenFolder));menu.Items.Add(new Forms.ToolStripSeparator());menu.Items.Add("退出",null,(s,e)=>Dispatch(RequestQuit));
+  var menu=new Forms.ContextMenuStrip();menu.Items.Add("打开 Banarec",null,(s,e)=>Dispatch(Show));shotMenu=new Forms.ToolStripMenuItem("截图   "+screenshotGesture.Display,null,(s,e)=>Dispatch(async()=>await Screenshot(false)));menu.Items.Add(shotMenu);recordMenu=new Forms.ToolStripMenuItem("开始 / 停止录制   "+recordGesture.Display,null,(s,e)=>Dispatch(async()=>{if(State=="idle")await Begin();else Stop();}));menu.Items.Add(recordMenu);menu.Items.Add("打开下载文件夹",null,(s,e)=>Dispatch(OpenFolder));menu.Items.Add(new Forms.ToolStripSeparator());menu.Items.Add("退出",null,(s,e)=>Dispatch(RequestQuit));
   var ico=Path.Combine(Entry.BaseDir,"Banarec.ico");tray=new Forms.NotifyIcon{Visible=true,Icon=File.Exists(ico)?new Drawing.Icon(ico):Drawing.SystemIcons.Application,Text="Banarec · 香蕉录屏",ContextMenuStrip=menu};tray.DoubleClick+=(s,e)=>Dispatch(Show);
-  Window.SourceInitialized+=(s,e)=>{handle=new WindowInteropHelper(Window).Handle;HwndSource.FromHwnd(handle).AddHook(Hook);OverlayNative.SetWindowDisplayAffinity(handle,0x11);RegisterKeys();};
+  Window.SourceInitialized+=(s,e)=>{handle=new WindowInteropHelper(Window).Handle;HwndSource.FromHwnd(handle).AddHook(Hook);WindowBackdrop.Enable(Window);OverlayNative.SetWindowDisplayAffinity(handle,0x11);RegisterKeys();};
   Window.Closing+=(s,e)=>{if(!disposed){e.Cancel=true;Window.Hide();}};
   timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(250)};timer.Tick+=(s,e)=>Tick();timer.Start();
   SystemEvents.SessionSwitch+=SessionChanged;Application.Current.SessionEnding+=(s,e)=>{if(State!="idle"){e.Cancel=true;RequestQuit();}};
@@ -89,19 +91,20 @@ sealed class Controller {
  public void Mode(string value){UI<FrameworkElement>("RecordPane").Visibility=value=="record"?Visibility.Visible:Visibility.Collapsed;UI<FrameworkElement>("ShotPane").Visibility=value=="shot"?Visibility.Visible:Visibility.Collapsed;UI<FrameworkElement>("SettingsPane").Visibility=value=="settings"?Visibility.Visible:Visibility.Collapsed;UI<FrameworkElement>("ModeTabs").Visibility=value=="settings"?Visibility.Collapsed:Visibility.Visible;}
  void RefreshRegion(){UI<TextBlock>("RegionSize").Text=area.Width+" × "+area.Height;UI<TextBlock>("RegionHint").Text=(area==Capture.Normalize(screen.Bounds,screen.Bounds)?"整个屏幕":"已框选区域")+" · 原始像素";}
  void UpdateQuality(){UI<TextBlock>("QualityLabel").Text="原生画质 · "+(UI<ComboBox>("Framerate").SelectedIndex==1?"60":"30")+" FPS";}
- void SettingsChanged(){if(loading)return;UpdateQuality();SaveSettings();if(handle!=IntPtr.Zero)RegisterScreenshotKey();}
+ void SettingsChanged(){if(loading)return;UpdateQuality();SaveSettings();}
  void ChangeStartup(bool enabled){if(loading)return;try{Startup.Set(enabled);Status(enabled?"已设置登录后驻留托盘":"已关闭登录自动启动");}catch(Exception ex){loading=true;UI<CheckBox>("AutoStart").IsChecked=Startup.Enabled;loading=false;Error(ex.Message);}}
- void LoadSettings(){try{var v=File.ReadAllLines(settings);UI<CheckBox>("SystemAudio").IsChecked=v[0]=="1";UI<CheckBox>("Microphone").IsChecked=v[1]=="1";UI<ComboBox>("Framerate").SelectedIndex=v[2]=="60"?1:0;UI<CheckBox>("Compatibility").IsChecked=v[3]=="1";UI<CheckBox>("ScreenshotHotkey").IsChecked=v.Length<5||v[4]=="1";}catch{}}
- void SaveSettings(){try{Directory.CreateDirectory(Path.GetDirectoryName(settings));File.WriteAllLines(settings,new[]{IsOn("SystemAudio")?"1":"0",IsOn("Microphone")?"1":"0",UI<ComboBox>("Framerate").SelectedIndex==1?"60":"30",IsOn("Compatibility")?"1":"0",IsOn("ScreenshotHotkey")?"1":"0"});}catch(Exception ex){Entry.Log(ex);}}
- void RegisterKeys(){if(!realHotkeys)return;recordKey=Native.RegisterHotKey(handle,1,0x4006,0x78);RegisterScreenshotKey();if(!recordKey)Status("录制快捷键被占用，请使用按钮或托盘");}
- void RegisterScreenshotKey(){
-  if(!realHotkeys)return;
-  if(shotKey){Native.UnregisterHotKey(handle,2);shotKey=false;}
-  if(shortcut!=null){shortcut.Dispose();shortcut=null;}
-  if(!IsOn("ScreenshotHotkey"))return;
-  shotKey=Native.RegisterHotKey(handle,2,0x4003,0x41);
-  if(!shotKey){shortcut=new ScreenshotShortcut(()=>Dispatch(async()=>await Screenshot(false)));if(shortcut.Active)Status("截图快捷键已就绪 · Ctrl + Alt + A");else Status("截图快捷键暂不可用，请使用截图按钮");}
+ void LoadSettings(){try{var v=File.ReadAllLines(settings);UI<CheckBox>("SystemAudio").IsChecked=v[0]=="1";UI<CheckBox>("Microphone").IsChecked=v[1]=="1";UI<ComboBox>("Framerate").SelectedIndex=v[2]=="60"?1:0;UI<CheckBox>("Compatibility").IsChecked=v[3]=="1";if(v.Length>=9&&v[4]=="2"){screenshotGesture=ReadGesture(v[5],v[6],HotkeyGesture.DefaultScreenshot);recordGesture=ReadGesture(v[7],v[8],HotkeyGesture.DefaultRecording);}}catch{}}
+ static HotkeyGesture ReadGesture(string modifiers,string key,HotkeyGesture fallback){uint m;int k;if(uint.TryParse(modifiers,out m)&&int.TryParse(key,out k)){var value=new HotkeyGesture(m,k);if(value.Valid)return value;}return fallback;}
+ void SaveSettings(){try{Directory.CreateDirectory(Path.GetDirectoryName(settings));File.WriteAllLines(settings,new[]{IsOn("SystemAudio")?"1":"0",IsOn("Microphone")?"1":"0",UI<ComboBox>("Framerate").SelectedIndex==1?"60":"30",IsOn("Compatibility")?"1":"0","2",screenshotGesture.Modifiers.ToString(),screenshotGesture.VirtualKey.ToString(),recordGesture.Modifiers.ToString(),recordGesture.VirtualKey.ToString()});}catch(Exception ex){Entry.Log(ex);}}
+ void RefreshHotkeyLabels(){UI<Button>("ScreenshotShortcutButton").Content=screenshotGesture.Display;UI<Button>("RecordingShortcutButton").Content=recordGesture.Display;UI<TextBlock>("ScreenshotHotkeyHero").Text=screenshotGesture.Display.Replace(" + ","  +  ");UI<TextBlock>("RecordHotkeyHint").Text="3 秒倒计时   ·   "+recordGesture.Display+" 开始 / 停止";if(shotMenu!=null)shotMenu.Text="截图   "+screenshotGesture.Display;if(recordMenu!=null)recordMenu.Text="开始 / 停止录制   "+recordGesture.Display;}
+ void ChangeHotkey(bool screenshot){if(State!="idle"){Status("请先结束当前操作，再修改快捷键");return;}UnregisterKeys();try{var dialog=new HotkeyCaptureWindow(screenshot?"截图":"录屏",screenshot?screenshotGesture:recordGesture,Window.Resources){Owner=Window};if(dialog.ShowDialog()!=true||dialog.Gesture==null)return;if(screenshot&&dialog.Gesture==recordGesture||!screenshot&&dialog.Gesture==screenshotGesture){Error("这个组合键已用于另一个功能，请换一个。");return;}if(screenshot)screenshotGesture=dialog.Gesture;else recordGesture=dialog.Gesture;SaveSettings();RefreshHotkeyLabels();Status((screenshot?"截图":"录屏")+"快捷键已设为 "+dialog.Gesture.Display);}finally{RegisterKeys();}}
+ void UnregisterKeys(){if(recordKey){Native.UnregisterHotKey(handle,1);recordKey=false;}if(shotKey){Native.UnregisterHotKey(handle,2);shotKey=false;}if(shortcut!=null){shortcut.Dispose();shortcut=null;}}
+ void RegisterKeys(){
+  if(!realHotkeys||handle==IntPtr.Zero)return;UnregisterKeys();var fallback=new System.Collections.Generic.List<GlobalShortcutHook.Binding>();recordKey=Native.RegisterHotKey(handle,1,recordGesture.Modifiers|0x4000,(uint)recordGesture.VirtualKey);shotKey=Native.RegisterHotKey(handle,2,screenshotGesture.Modifiers|0x4000,(uint)screenshotGesture.VirtualKey);
+  if(!recordKey)fallback.Add(new GlobalShortcutHook.Binding(recordGesture,()=>Dispatch(async()=>{if(State=="idle")await Begin();else if(State!="selecting"&&State!="screenshot")Stop();})));if(!shotKey)fallback.Add(new GlobalShortcutHook.Binding(screenshotGesture,()=>Dispatch(async()=>await Screenshot(false))));
+  if(fallback.Count>0){shortcut=new GlobalShortcutHook(fallback);if(!shortcut.Active)Status("部分全局快捷键暂不可用，请使用窗口或托盘");else Status("快捷键已就绪 · 兼容模式");}
  }
+ public void SetHotkeysForTest(HotkeyGesture screenshot,HotkeyGesture recording){screenshotGesture=screenshot;recordGesture=recording;SaveSettings();RefreshHotkeyLabels();RegisterKeys();}
  IntPtr Hook(IntPtr hwnd,int msg,IntPtr wp,IntPtr lp,ref bool handled){if(msg==0x312){handled=true;if(wp.ToInt32()==1)Dispatch(async()=>{if(State=="idle")await Begin();else if(State!="selecting"&&State!="screenshot")Stop();});if(wp.ToInt32()==2)Dispatch(async()=>await Screenshot(false));}return IntPtr.Zero;}
  void Busy(bool value){foreach(string n in new[]{"Screens","FullButton","RegionButton","SystemAudio","Microphone","Framerate","Compatibility","ScreenshotButton"})UI<UIElement>(n).IsEnabled=!value;UI<Button>("StartButton").Content=value?"停止并保存":"开始录制";}
  Forms.DialogResult Select(RegionPicker p){picker=p;try{return PickerOverride!=null?PickerOverride(p):p.ShowDialog();}finally{picker=null;}}
@@ -133,11 +136,11 @@ sealed class Controller {
 sealed class Hud:Window,IDisposable {
  readonly TextBlock title;readonly Button stop;bool dispose;
  public event Action StopRequested;
- public Hud(ResourceDictionary resources,Drawing.Rectangle area,bool system,bool mic){Resources=resources;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;AllowsTransparency=true;Background=Brushes.Transparent;Topmost=true;ShowInTaskbar=false;ShowActivated=false;Width=376;Height=82;Title="Banarec · 录制中";
-  var shell=new Border{Background=new SolidColorBrush(Color.FromRgb(250,250,251)),CornerRadius=new CornerRadius(17),BorderBrush=new SolidColorBrush(Color.FromRgb(224,224,228)),BorderThickness=new Thickness(1),Padding=new Thickness(17,12,12,12)};
+ public Hud(ResourceDictionary resources,Drawing.Rectangle area,bool system,bool mic){Resources=resources;WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;AllowsTransparency=false;Background=new SolidColorBrush(Color.FromArgb(1,255,255,255));Topmost=true;ShowInTaskbar=false;ShowActivated=false;Width=376;Height=82;Title="Banarec · 录制中";
+  var shell=new Border{Background=new SolidColorBrush(Color.FromArgb(205,250,250,251)),CornerRadius=new CornerRadius(17),BorderBrush=new SolidColorBrush(Color.FromArgb(180,255,255,255)),BorderThickness=new Thickness(1),Padding=new Thickness(17,12,12,12)};
   var grid=new Grid();grid.ColumnDefinitions.Add(new ColumnDefinition());grid.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(106)});var info=new StackPanel{VerticalAlignment=VerticalAlignment.Center};title=new TextBlock{Text="准备录制",FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI"),FontSize=15,FontWeight=FontWeights.SemiBold,Foreground=new SolidColorBrush(Color.FromRgb(66,65,62))};info.Children.Add(title);info.Children.Add(new TextBlock{Text=(system?"系统声 开":"系统声 关")+"   ·   "+(mic?"麦克风 开":"麦克风 关"),Foreground=Brushes.Gray,FontSize=11,Margin=new Thickness(0,6,0,0)});
   info.Cursor=Cursors.SizeAll;info.MouseLeftButtonDown+=(s,e)=>{try{DragMove();}catch{}};grid.Children.Add(info);stop=new Button{Content="停止并保存",Background=new SolidColorBrush(Color.FromRgb(249,228,227)),Foreground=new SolidColorBrush(Color.FromRgb(179,67,61)),Padding=new Thickness(8,12,8,12),VerticalAlignment=VerticalAlignment.Center};stop.Click+=(s,e)=>{if(StopRequested!=null)StopRequested();};Grid.SetColumn(stop,1);grid.Children.Add(stop);shell.Child=grid;Content=shell;
-  SourceInitialized+=(s,e)=>OverlayNative.SetWindowDisplayAffinity(new WindowInteropHelper(this).Handle,0x11);
+  SourceInitialized+=(s,e)=>{WindowBackdrop.Enable(this);OverlayNative.SetWindowDisplayAffinity(new WindowInteropHelper(this).Handle,0x11);};
   Loaded+=(s,e)=>{var source=PresentationSource.FromVisual(this);var m=source.CompositionTarget.TransformFromDevice;var point=m.Transform(new Point(area.Left+area.Width/2,area.Top));var work=Forms.Screen.FromRectangle(area).WorkingArea;var tl=m.Transform(new Point(work.Left,work.Top));var br=m.Transform(new Point(work.Right,work.Bottom));Left=Math.Max(tl.X,Math.Min(point.X-Width/2,br.X-Width));Top=point.Y-Height-10;if(Top<tl.Y)Top=tl.Y+12;};
   Closing+=(s,e)=>{if(!dispose){e.Cancel=true;if(StopRequested!=null)StopRequested();}};
  }

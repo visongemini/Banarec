@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Ink;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Drawing=System.Drawing;
@@ -20,10 +21,10 @@ sealed class AnnotationWindow : Window {
  public Drawing.Bitmap Result {get;private set;}
  public AnnotationWindow(Drawing.Bitmap image,ResourceDictionary resources) {
   Resources=resources;Title="Banarec · 截图标注";FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI");FontSize=13;
-  WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;AllowsTransparency=true;Background=Brushes.Transparent;
+  WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;AllowsTransparency=false;Background=Brush("#01FFFFFF");
   Width=Math.Min(1100,SystemParameters.WorkArea.Width-36);Height=Math.Min(820,SystemParameters.WorkArea.Height-36);WindowStartupLocation=WindowStartupLocation.CenterScreen;
   pixelsWide=image.Width;pixelsHigh=image.Height;
-  var shell=new Border{Margin=new Thickness(8),CornerRadius=new CornerRadius(20),Background=Brush("#F8F8FA"),BorderBrush=Brush("#DEDEE3"),BorderThickness=new Thickness(1)};
+  var shell=new Border{CornerRadius=new CornerRadius(20),Background=Brush("#D8F8F8FA"),BorderBrush=Brush("#B8FFFFFF"),BorderThickness=new Thickness(1)};
   var layout=new Grid();layout.RowDefinitions.Add(new RowDefinition{Height=new GridLength(64)});layout.RowDefinitions.Add(new RowDefinition{Height=new GridLength(62)});layout.RowDefinitions.Add(new RowDefinition());layout.RowDefinitions.Add(new RowDefinition{Height=new GridLength(34)});shell.Child=layout;Content=shell;
   var header=new Grid{Margin=new Thickness(23,0,18,0),Background=Brushes.Transparent};header.MouseLeftButtonDown+=(s,e)=>{if(e.OriginalSource is Grid||e.OriginalSource is TextBlock)try{DragMove();}catch{}};
   header.Children.Add(new TextBlock{Text="截图标注",FontSize=19,FontWeight=FontWeights.SemiBold,VerticalAlignment=VerticalAlignment.Center,Foreground=Brush("#2F3035")});
@@ -45,6 +46,7 @@ sealed class AnnotationWindow : Window {
   Ink.Strokes.StrokesChanged+=(s,e)=>{if(restoring)return;undo.Push(before.Clone());redo.Clear();before=Ink.Strokes.Clone();UpdateUndo();};
   var footer=new TextBlock{Text=pixelsWide+" × "+pixelsHigh+" px   ·   Ctrl+Z 撤销   ·   Ctrl+Y 重做   ·   Esc 取消",FontSize=11,Foreground=Brush("#919299"),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};Grid.SetRow(footer,3);layout.Children.Add(footer);
   PreviewKeyDown+=(s,e)=>{if(e.Key==Key.Escape){DialogResult=false;e.Handled=true;}else if(Keyboard.Modifiers==ModifierKeys.Control&&e.Key==Key.Z){Undo();e.Handled=true;}else if(Keyboard.Modifiers==ModifierKeys.Control&&e.Key==Key.Y){Redo();e.Handled=true;}};
+  SourceInitialized+=(s,e)=>{WindowBackdrop.Enable(this);OverlayNative.SetWindowDisplayAffinity(new WindowInteropHelper(this).Handle,0x11);};
   UpdatePen();UpdateUndo();
  }
  static Brush Brush(string value){return (Brush)new BrushConverter().ConvertFromString(value);}

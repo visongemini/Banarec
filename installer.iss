@@ -1,7 +1,7 @@
 ﻿[Setup]
 AppId={{5A498A99-58C9-4193-B12F-50252995DBFA}
 AppName=Banarec · 香蕉录屏
-AppVersion=2.1.0
+AppVersion=2.2.0
 AppPublisher=Banarec
 DefaultDirName={localappdata}\Programs\Banarec
 DefaultGroupName=Banarec
@@ -10,7 +10,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 OutputDir=dist
-OutputBaseFilename=Banarec-Setup-2.1.0
+OutputBaseFilename=Banarec-Setup-2.2.0
 SetupIconFile=assets\Banarec.ico
 UninstallDisplayIcon={app}\Banarec.exe
 Compression=lzma2
@@ -21,7 +21,7 @@ DisableProgramGroupPage=yes
 AppMutex=Local\Banarec.Desktop
 CloseApplications=yes
 RestartApplications=no
-VersionInfoVersion=2.1.0.0
+VersionInfoVersion=2.2.0.0
 VersionInfoDescription=Banarec · 香蕉录屏 安装程序
 UninstallDisplayName=Banarec · 香蕉录屏
 
@@ -38,8 +38,8 @@ Source: "release\Banarec.exe.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "release\Banarec.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "release\Banarec.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "release\ScreenRecorderLib.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "release\使用说明.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "release\第三方许可.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "release\guide.txt"; DestDir: "{app}"; DestName: "使用说明.txt"; Flags: ignoreversion
+Source: "release\THIRD-PARTY-LICENSES.txt"; DestDir: "{app}"; DestName: "第三方许可.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Banarec · 香蕉录屏"; Filename: "{app}\Banarec.exe"
