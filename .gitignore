@@ -1,0 +1,25 @@
+# Local build outputs and downloaded build tools
+/release/
+/dist/
+/tools/
+/.cache/
+/.build-verify/
+
+# Desktop test captures can contain personal screen content
+/tests/*
+!/tests/*.cs
+!/tests/README.md
+
+# Original image generation working files contain local reference paths
+/assets/Banny-recording-original.png
+/assets/generation.md
+
+.vs/
+bin/
+obj/
+*.user
+*.log
+*.pdb
+*.tmp
+.env
+.env.*

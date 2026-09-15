@@ -1,0 +1,5 @@
+﻿using System;using System.IO;using System.Windows;using System.Windows.Controls;using System.Windows.Media;using System.Windows.Media.Imaging;using System.Windows.Threading;
+class Preview {
+ [STAThread] static void Main(){Native.SetProcessDpiAwarenessContext(new IntPtr(-4));var app=new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};var c=new Controller(false,false);c.Window.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle,(Action)(()=>{c.UI<CheckBox>("SystemAudio").IsChecked=true;Render(c,"record-ui.png");c.UI<RadioButton>("ScreenshotTab").IsChecked=true;Render(c,"screenshot-ui.png");c.Mode("settings");Render(c,"settings-ui.png");c.RequestQuit();}));app.Run();}
+ static void Render(Controller c,string name){c.Window.UpdateLayout();var image=new RenderTargetBitmap((int)c.Window.ActualWidth,(int)c.Window.ActualHeight,96,96,PixelFormats.Pbgra32);image.Render(c.Window);var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(image));using(var f=File.Create(Path.Combine(TestPaths.Artifacts,name)))png.Save(f);}
+}
