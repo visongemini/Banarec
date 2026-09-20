@@ -1,6 +1,7 @@
 # Local build outputs and downloaded build tools
 /release/
 /dist/
+/artifacts/
 /tools/
 /.cache/
 /.build-verify/
@@ -9,6 +10,7 @@
 /tests/*
 !/tests/*.cs
 !/tests/README.md
+!/tests/volc_stream_probe.py
 
 # Original image generation working files contain local reference paths
 /assets/Banny-recording-original.png

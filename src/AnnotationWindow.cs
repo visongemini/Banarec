@@ -20,7 +20,7 @@ sealed class AnnotationWindow : Window {
  readonly Dictionary<Color,RadioButton> colors=new Dictionary<Color,RadioButton>();
  public Drawing.Bitmap Result {get;private set;}
  public AnnotationWindow(Drawing.Bitmap image,ResourceDictionary resources) {
-  Resources=resources;Title="Banarec · 截图标注";FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI");FontSize=13;
+  Resources=resources;Title="BanaStudio · 截图标注";FontFamily=new FontFamily("Segoe UI, Microsoft YaHei UI");FontSize=13;
   WindowStyle=WindowStyle.None;ResizeMode=ResizeMode.NoResize;AllowsTransparency=false;Background=Brush("#01FFFFFF");
   Width=Math.Min(1100,SystemParameters.WorkArea.Width-36);Height=Math.Min(820,SystemParameters.WorkArea.Height-36);WindowStartupLocation=WindowStartupLocation.CenterScreen;
   pixelsWide=image.Width;pixelsHigh=image.Height;

@@ -1,6 +1,6 @@
 # 应用图标
 
-`Banarec.png` 和 `Banarec.ico` 是实际使用的应用图标。
+`BanaStudio.png` 和 `BanaStudio.ico` 是实际使用的应用图标。
 
 图标依据项目提供的蕉仔 Banny 无斑日常版正面、侧面角色设定，通过内置 imagegen 生成。保留黄色钩织身体、半睁眼、橙色脸颊、绿色头冠、黑色弯柄及橙色绒球，并加入摄像机。
 

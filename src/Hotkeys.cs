@@ -12,6 +12,7 @@ sealed class HotkeyGesture : IEquatable<HotkeyGesture> {
  public readonly uint Modifiers;public readonly int VirtualKey;
  public static readonly HotkeyGesture DefaultScreenshot=new HotkeyGesture(Control|Alt,0x41);
  public static readonly HotkeyGesture DefaultRecording=new HotkeyGesture(Control|Shift,0x78);
+ public static readonly HotkeyGesture DefaultVoice=new HotkeyGesture(Control|Alt,0x20);
  public HotkeyGesture(uint modifiers,int virtualKey){Modifiers=modifiers&(Alt|Control|Shift);VirtualKey=virtualKey;}
  public bool Valid {get{return Modifiers!=0&&VirtualKey>0&&!IsModifier(VirtualKey);}}
  public string Display {get{var values=new List<string>();if((Modifiers&Control)!=0)values.Add("Ctrl");if((Modifiers&Alt)!=0)values.Add("Alt");if((Modifiers&Shift)!=0)values.Add("Shift");values.Add(KeyName(VirtualKey));return string.Join(" + ",values);}}
@@ -30,7 +31,7 @@ sealed class HotkeyGesture : IEquatable<HotkeyGesture> {
 }
 
 sealed class GlobalShortcutHook : IDisposable {
- public sealed class Binding {public readonly HotkeyGesture Gesture;public readonly Action Trigger;internal bool Held;public Binding(HotkeyGesture gesture,Action trigger){Gesture=gesture;Trigger=trigger;}}
+ public sealed class Binding {public readonly HotkeyGesture Gesture;public readonly Action Trigger,Release;public readonly Func<bool> Enabled;internal bool Held;public Binding(HotkeyGesture gesture,Action trigger,Action release=null,Func<bool> enabled=null){Gesture=gesture;Trigger=trigger;Release=release;Enabled=enabled;}}
  delegate IntPtr Callback(int code,IntPtr message,IntPtr data);
  [DllImport("user32.dll",SetLastError=true)] static extern IntPtr SetWindowsHookEx(int id,Callback callback,IntPtr module,uint thread);
  [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
@@ -44,7 +45,7 @@ sealed class GlobalShortcutHook : IDisposable {
  static uint CurrentModifiers(){if(Down(0x5B)||Down(0x5C))return 0x80000000;uint value=0;if(Down(0x11))value|=HotkeyGesture.Control;if(Down(0x12))value|=HotkeyGesture.Alt;if(Down(0x10))value|=HotkeyGesture.Shift;return value;}
  IntPtr Handle(int code,IntPtr message,IntPtr data){
   if(code>=0){int vk=Marshal.ReadInt32(data),msg=message.ToInt32();bool down=msg==0x100||msg==0x104,up=msg==0x101||msg==0x105;
-   foreach(var binding in bindings){if(vk!=binding.Gesture.VirtualKey)continue;if(up&&binding.Held){binding.Held=false;return new IntPtr(1);}if(down&&(binding.Held||CurrentModifiers()==binding.Gesture.Modifiers)){if(!binding.Held){binding.Held=true;binding.Trigger();}return new IntPtr(1);}}
+   foreach(var binding in bindings){if(vk!=binding.Gesture.VirtualKey)continue;if(up&&binding.Held){binding.Held=false;try{if(binding.Release!=null)binding.Release();}catch{}return new IntPtr(1);}if(down&&(binding.Held||CurrentModifiers()==binding.Gesture.Modifiers)){if(!binding.Held&&binding.Enabled!=null&&!binding.Enabled())continue;if(!binding.Held){binding.Held=true;try{binding.Trigger();}catch{}}return new IntPtr(1);}}
   }
   return CallNextHookEx(hook,code,message,data);
  }
@@ -60,7 +61,7 @@ sealed class HotkeyCaptureWindow : Window {
   var content=new StackPanel();content.Children.Add(new TextBlock{Text="设置"+action+"快捷键",FontSize=20,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center});content.Children.Add(new TextBlock{Text="请按下包含 Ctrl、Alt 或 Shift 的组合键",Foreground=Brush("#777980"),FontSize=12,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,10,0,18)});
   var keyBox=new Border{Background=Brush("#BFFFFFFF"),BorderBrush=Brush("#C8FFFFFF"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(18,13,18,13),HorizontalAlignment=HorizontalAlignment.Stretch};preview=new TextBlock{Text=current.Display,FontSize=17,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center};keyBox.Child=preview;content.Children.Add(keyBox);
   hint=new TextBlock{Text="等待输入…",Foreground=Brush("#9A7A25"),FontSize=11,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,10,0,0)};content.Children.Add(hint);layout.Children.Add(content);
-  var buttons=new Grid{Margin=new Thickness(0,18,0,0)};buttons.ColumnDefinitions.Add(new ColumnDefinition());buttons.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(12)});buttons.ColumnDefinitions.Add(new ColumnDefinition());var cancel=new Button{Content="取消",Height=40};cancel.Click+=(s,e)=>DialogResult=false;buttons.Children.Add(cancel);var reset=new Button{Content="恢复默认",Height=40,Background=Brush("#E9BE46"),Foreground=Brush("#493B18")};reset.Click+=(s,e)=>{Gesture=action=="截图"?HotkeyGesture.DefaultScreenshot:HotkeyGesture.DefaultRecording;DialogResult=true;};Grid.SetColumn(reset,2);buttons.Children.Add(reset);Grid.SetRow(buttons,1);layout.Children.Add(buttons);shell.Child=layout;Content=shell;
+  var buttons=new Grid{Margin=new Thickness(0,18,0,0)};buttons.ColumnDefinitions.Add(new ColumnDefinition());buttons.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(12)});buttons.ColumnDefinitions.Add(new ColumnDefinition());var cancel=new Button{Content="取消",Height=40};cancel.Click+=(s,e)=>DialogResult=false;buttons.Children.Add(cancel);var reset=new Button{Content="恢复默认",Height=40,Background=Brush("#E9BE46"),Foreground=Brush("#493B18")};reset.Click+=(s,e)=>{Gesture=action=="截图"?HotkeyGesture.DefaultScreenshot:action=="语音识别"?HotkeyGesture.DefaultVoice:HotkeyGesture.DefaultRecording;DialogResult=true;};Grid.SetColumn(reset,2);buttons.Children.Add(reset);Grid.SetRow(buttons,1);layout.Children.Add(buttons);shell.Child=layout;Content=shell;
   PreviewKeyDown+=Capture;SourceInitialized+=(s,e)=>WindowBackdrop.Enable(this);Loaded+=(s,e)=>Keyboard.Focus(this);
  }
  void Capture(object sender,KeyEventArgs e){e.Handled=true;if(e.Key==Key.Escape){DialogResult=false;return;}HotkeyGesture value;if(!HotkeyGesture.TryCreate(e,out value)){hint.Text="请同时按住 Ctrl、Alt 或 Shift";return;}Gesture=value;preview.Text=value.Display;hint.Text="已设置";DialogResult=true;}

@@ -12,7 +12,7 @@ static class OverlayNative {
 sealed class RecordingBorder : Form {
  public bool ExcludedFromCapture { get; private set; }
  public RecordingBorder(Rectangle area) {
-  Text="Banarec · 录制边框"; AutoScaleMode=AutoScaleMode.None;
+  Text="BanaStudio · 录制边框"; AutoScaleMode=AutoScaleMode.None;
   FormBorderStyle=FormBorderStyle.None; StartPosition=FormStartPosition.Manual;
   Bounds=area; ShowInTaskbar=false; TopMost=true; BackColor=Color.FromArgb(255,67,87);
   Opacity=0.99;
